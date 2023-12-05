@@ -43,12 +43,22 @@ class ChatbotController extends Controller
                         ->select('product_id')
                         ->whereIn('category_id',$category_ids)
                         ->get();
-        $product_ids = collect($product_ids)->map(function($x){ return (array) $x; })->toArray();
+        $product_ids = collect($product_ids)->map(function($x){ return $x->product_id; })->toArray();
+
+        $product_ids = $this->validateProducts($product_ids,count($category_ids));
+
         $products = DB::table('products')
                     ->select('*')
                     ->whereIn('id',$product_ids)
                     ->get();
-        return json_encode(['products'=>$products,'categories'=>$entities]);
+        $all_quoted = DB::table('quoted_products')
+                    ->select('count(*)')
+                    ->count();
+                // dd($all_quoted);
+        $products = $this->countPercentageBestSeller($products,$all_quoted);
+        
+
+        return json_encode($products);
     }
 
     /**
@@ -104,5 +114,77 @@ class ChatbotController extends Controller
             }
         }
         return $arr;
+    }
+
+    public function validateProducts($ids,$count){
+        $arr = [];
+        $tmp = array_count_values($ids);
+        foreach($ids as $id){
+            if($tmp[$id] == $count){
+                array_push($arr, $id);
+            }
+        }
+        return $arr;
+    }
+
+    public function getProducts(){
+        $products = DB::table('products')
+                    ->select('*')
+                    ->get();
+        return json_encode($products);
+    }
+
+    public function saveQuote(Request $request){
+        // dd($request['products']);
+        $products = $request['products'];
+        // dd($products);
+        $quoted = '';
+        $counter = sizeof($products);
+        try{
+        foreach($products as $key => $product){
+            // dd(gettype($product['id']));
+            // array_push($quoted,
+            //     "'product_id' => ".$product['id'].""
+            // );
+            // $quoted.="['product_id' => ".$product['id']."]";
+            // if($key < ($counter-1)) $quoted .= ",";
+            DB::table('quoted_products')
+            ->insert([
+               'product_id' => $product['id']
+            ]);
+        }
+        // dd($quoted);
+        return json_encode("Success");
+        }catch(Error $er){
+            dd($er);
+        }catch(Exception $ex){
+            dd($ex);
+        }
+        
+    }
+
+    private function countPercentageBestSeller($datas,$count){
+        foreach($datas as $key => $data){
+            // dd($data);
+           $cnt =  DB::table('quoted_products')
+                ->select('*')
+                ->where('product_id', $data->id)
+                ->count();
+            $percent = $cnt / $count;
+            if($percent > .3){
+                $datas[$key]->label = 'hot';
+            }
+            $datas[$key]->percent = $percent;
+            $trusted_brands = DB::table('trusted_brands')
+                                ->select('name')
+                                ->get();
+            $trusted_brands = collect($trusted_brands)->map(function($x){ return $x->name; })->toArray();
+            foreach($trusted_brands as $brand){
+                if(str_contains(strtolower($data->name), $brand)){
+                    $datas[$key]->trusted = true;
+                }
+            }
+        }
+        return $datas;
     }
 }

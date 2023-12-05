@@ -18,4 +18,6 @@ use App\Http\Controllers\ChatbotController;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
-Route::post('/askQuestion', [ChatbotController::class,'index']);
+Route::post('/chat', [ChatbotController::class,'index']);
+Route::get('/products',[ChatbotController::class,'getProducts']);
+Route::post('/saveQuote',[ChatbotController::class,'saveQuote']);
